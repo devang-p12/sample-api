@@ -6,13 +6,87 @@ Unlike frontend-only mock tools, the Sentinel API Playground runs a **real HTTP 
 
 ---
 
-## Architecture Overview
+## ⚡ Quick Start: How to Run This Project
+
+### Option 1: Run Everything with a Single Command (Recommended)
+
+From the root directory:
+
+```bash
+# 1. Install all dependencies (root, backend, and frontend)
+npm run install:all
+
+# 2. Start both Backend (:4000) and Frontend (:5173) concurrently
+npm run dev
+```
+
+That's it! Open [http://localhost:5173](http://localhost:5173) in your browser.
+
+---
+
+### Option 2: Run with Docker Compose
+
+If you have Docker installed, you can start the entire platform with one command:
+
+```bash
+docker compose up --build
+```
+
+To stop:
+```bash
+docker compose down
+```
+
+---
+
+### Option 3: Run Frontend & Backend in Separate Terminals
+
+#### Terminal 1 — Backend (Port 4000)
+```bash
+cd backend
+npm install
+npm run dev
+```
+
+#### Terminal 2 — Frontend (Port 5173)
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+---
+
+### Option 4: Run Automated Verification Tests
+
+To verify that all REST endpoints, CRUD operations, chaos scenarios, and telemetry work as expected:
+
+```bash
+npm test
+```
+
+---
+
+## 🌐 Application URLs
+
+| Interface | URL | Description |
+|---|---|---|
+| **Web Dashboard** | [http://localhost:5173](http://localhost:5173) | Observability UI, Endpoint Explorer, Scenarios, Activity Log, API Tester |
+| **Backend REST APIs** | [http://localhost:4000/api](http://localhost:4000/api) | Real target HTTP endpoints monitored by Sentinel |
+| **System Health Probe** | [http://localhost:4000/api/health](http://localhost:4000/api/health) | Primary system health check probe |
+| **Payments Health Probe** | [http://localhost:4000/api/payments/health](http://localhost:4000/api/payments/health) | Dedicated payment gateway health check |
+| **Interactive Swagger Docs** | [http://localhost:4000/docs](http://localhost:4000/docs) | Live Swagger UI documentation & "Try It Out" |
+| **OpenAPI 3.0 Schema** | [http://localhost:4000/openapi.json](http://localhost:4000/openapi.json) | Machine-readable OpenAPI 3.0 specification |
+
+---
+
+## 🏗️ Architecture Overview
 
 ```text
        Sentinel Monitoring & Load Testing
-                      |
-                      | Real HTTP Requests (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS)
-                      v
+                      │
+                      │ Real HTTP Requests (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS)
+                      ▼
         Sentinel API Playground (:4000)
  ┌─────────────────────────────────────────────────────────┐
  │                   Simulation Engine                     │
@@ -26,14 +100,14 @@ Unlike frontend-only mock tools, the Sentinel API Playground runs a **real HTTP 
  │                  In-Memory Datastore                    │
  │    Users • Products • Orders • Payments • Inventory     │
  └─────────────────────────────────────────────────────────┘
-                      ^
-                      | Web Dashboard (:5173)
+                      ▲
+                      │ Web Dashboard (:5173)
          Playground Observability Dashboard
 ```
 
 ---
 
-## Key Capabilities
+## 🌟 Key Capabilities
 
 1. **Real HTTP Backend & Full Method Support**:
    - Complete support for `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, and `OPTIONS`.
@@ -88,7 +162,7 @@ Unlike frontend-only mock tools, the Sentinel API Playground runs a **real HTTP 
 
 ---
 
-## Project Structure
+## 📁 Project Structure
 
 ```text
 sentinel-api-playground/
@@ -132,66 +206,11 @@ sentinel-api-playground/
 
 ---
 
-## Quick Start (Local Development)
-
-### Prerequisites
-
-- Node.js >= 20.x
-- npm >= 10.x
-
-### 1. Install Dependencies
-
-```bash
-# In the repository root
-npm run dev:backend    # Starts backend on http://localhost:4000
-npm run dev:frontend   # Starts frontend on http://localhost:5173
-```
-
-Or install and run individually:
-
-```bash
-# Backend
-cd backend
-npm install
-npm run dev
-
-# Frontend (in another terminal)
-cd frontend
-npm install
-npm run dev
-```
-
-### 2. Verify System Health
-
-Run the automated test suite to verify end-to-end functionality:
-
-```bash
-node test-simulation.cjs
-```
-
----
-
-## Running with Docker Compose
-
-To start the complete Sentinel API Playground stack (backend + frontend with Nginx proxy):
-
-```bash
-docker compose up --build
-```
-
-Access the interfaces:
-- **Playground Dashboard**: `http://localhost:5173`
-- **Playground Backend API**: `http://localhost:4000/api`
-- **Swagger Documentation**: `http://localhost:4000/docs`
-- **OpenAPI 3.0 Spec**: `http://localhost:4000/openapi.json`
-
----
-
-## Environment Variables
+## ⚙️ Environment Variables
 
 ### Backend Configuration
 
-Create `backend/.env` (optional, defaults provided):
+Create `backend/.env` (optional, default fallbacks provided):
 
 | Variable | Default | Description |
 |---|---|---|
@@ -206,7 +225,7 @@ Create `backend/.env` (optional, defaults provided):
 
 ---
 
-## Connecting Sentinel to the Playground
+## 🔗 Connecting Sentinel to the Playground
 
 The Sentinel API Playground provides stable, deterministic HTTP endpoints designed for Sentinel's uptime monitors, test runners, and load injectors.
 
@@ -233,7 +252,7 @@ Target Sentinel load tests against:
 
 ---
 
-## Step 59 Demonstration Flow: Degradation → Outage → Alert → Incident → Recovery
+## 🎬 Step 59 Demonstration Flow: Degradation → Outage → Alert → Incident → Recovery
 
 The completed playground supports the exact demonstration flow:
 
@@ -264,14 +283,14 @@ The completed playground supports the exact demonstration flow:
 
 ---
 
-## API Documentation
+## 📖 API Documentation
 
-- **Interactive Swagger UI**: `http://localhost:4000/docs`
-- **Raw OpenAPI 3.0 Schema**: `http://localhost:4000/openapi.json`
-- **Direct in-dashboard documentation**: `http://localhost:5173/docs`
+- **Interactive Swagger UI**: [http://localhost:4000/docs](http://localhost:4000/docs)
+- **Raw OpenAPI 3.0 Schema**: [http://localhost:4000/openapi.json](http://localhost:4000/openapi.json)
+- **Direct in-dashboard documentation**: [http://localhost:5173/docs](http://localhost:5173/docs)
 
 ---
 
-## License
+## 📄 License
 
 MIT License. Engineered for Sentinel API Monitoring & Reliability Testing.
