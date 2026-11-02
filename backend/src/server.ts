@@ -16,25 +16,15 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-// CORS Configuration
+// CORS Configuration — support credentials and any caller origin dynamically
 app.use(
   cors({
-    origin: '*',
+    origin: (origin, callback) => {
+      // Reflect request origin so Access-Control-Allow-Credentials: true is accepted by browsers
+      callback(null, origin || true);
+    },
+    credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'],
-    allowedHeaders: [
-      'Content-Type',
-      'Authorization',
-      'X-Request-ID',
-      'X-API-Key',
-      'Accept',
-      'Origin',
-      'X-Requested-With',
-      'X-Chaos-Downtime',
-      'X-Chaos-Latency',
-      'X-Chaos-Status',
-      'X-Chaos-Message',
-      'X-Chaos-Schema',
-    ],
     exposedHeaders: [
       'X-Request-ID',
       'X-Response-Time',
@@ -46,9 +36,10 @@ app.use(
       'X-RateLimit-Reset',
       'Allow',
     ],
-    credentials: true,
   })
 );
+
+app.options('*', cors());
 
 // Content-Type & Body Parsers
 app.use(express.json({ limit: '10mb' }));

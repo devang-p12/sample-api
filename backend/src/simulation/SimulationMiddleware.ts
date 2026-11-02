@@ -18,8 +18,9 @@ export const simulationMiddleware = async (req: Request, res: Response, next: Ne
 
   const fullPath = (req.originalUrl || req.url).split('?')[0];
 
-  // Skip simulation logic for internal playground control and docs endpoints
+  // Skip simulation logic for internal playground control, docs endpoints, and CORS preflight
   if (
+    req.method === 'OPTIONS' ||
     fullPath.startsWith('/api/simulation') ||
     fullPath.startsWith('/api/activity') ||
     fullPath === '/openapi.json' ||
