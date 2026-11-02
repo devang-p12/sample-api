@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: sentinel-simulation-backend
+    env: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MAX_REQUEST_LOGS
+        value: 1000
+      - key: DEFAULT_AUTH_TOKEN
+        value: sentinel-mock-jwt-token-xyz
+      - key: DEFAULT_API_KEY
+        value: sentinel-api-key-live-12345
+      - key: BASIC_AUTH_USER
+        value: admin
+      - key: BASIC_AUTH_PASSWORD
+        value: sentinel123

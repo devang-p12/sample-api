@@ -7,7 +7,59 @@ import {
   RequestStats,
 } from '../types/index.js';
 
-const API_BASE = '/api';
+export function getBackendBaseUrl(): string {
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('sentinel_backend_url');
+    if (saved && saved.trim()) {
+      return saved.trim().replace(/\/$/, '');
+    }
+  }
+  const envUrl = (import.meta as any).env?.VITE_API_BASE_URL || (import.meta as any).env?.VITE_API_URL || '';
+  if (envUrl && envUrl.trim()) {
+    return envUrl.trim().replace(/\/$/, '');
+  }
+  return '';
+}
+
+export function setBackendBaseUrl(url: string): void {
+  if (typeof window !== 'undefined') {
+    const trimmed = url.trim().replace(/\/$/, '');
+    if (!trimmed) {
+      localStorage.removeItem('sentinel_backend_url');
+    } else {
+      localStorage.setItem('sentinel_backend_url', trimmed);
+    }
+  }
+}
+
+export function getEffectiveApiUrl(path: string): string {
+  const base = getBackendBaseUrl();
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  if (!base) {
+    return cleanPath;
+  }
+  return `${base}${cleanPath}`;
+}
+
+export async function testBackendConnection(targetUrl?: string): Promise<{ ok: boolean; message: string; latencyMs: number; status?: number }> {
+  const base = (targetUrl !== undefined ? targetUrl.trim().replace(/\/$/, '') : getBackendBaseUrl()) || '';
+  const healthUrl = base ? `${base}/api/health` : '/api/health';
+  const start = performance.now();
+  try {
+    const res = await fetch(healthUrl);
+    const latencyMs = Math.round(performance.now() - start);
+    if (res.ok) {
+      const data = await res.json();
+      return { ok: true, message: `Connected (${data.status || 'operational'})`, latencyMs, status: res.status };
+    }
+    return { ok: false, message: `HTTP ${res.status} response from server`, latencyMs, status: res.status };
+  } catch (err: any) {
+    const latencyMs = Math.round(performance.now() - start);
+    return { ok: false, message: err.message || 'Connection failed', latencyMs, status: 0 };
+  }
+}
+
+const endpoint = (subPath: string) => getEffectiveApiUrl(`/api${subPath}`);
 
 export const api = {
   // Config & State
@@ -21,13 +73,13 @@ export const api = {
       globalOutageActive: boolean;
     };
   }> {
-    const res = await fetch(`${API_BASE}/simulation/config`);
+    const res = await fetch(endpoint('/simulation/config'));
     if (!res.ok) throw new Error('Failed to fetch simulation config');
     return res.json();
   },
 
   async updateGlobalSimulation(patch: Partial<GlobalSimulationState>): Promise<{ global: GlobalSimulationState }> {
-    const res = await fetch(`${API_BASE}/simulation/global`, {
+    const res = await fetch(endpoint('/simulation/global'), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
@@ -37,62 +89,81 @@ export const api = {
   },
 
   async resetAllToHealthy(): Promise<{ message: string }> {
-    const res = await fetch(`${API_BASE}/simulation/reset`, { method: 'POST' });
+    const res = await fetch(endpoint('/simulation/reset'), { method: 'POST' });
     if (!res.ok) throw new Error('Failed to reset simulation');
     return res.json();
   },
 
   // Endpoints
   async getEndpoints(): Promise<{ total: number; endpoints: EndpointDefinition[] }> {
-    const res = await fetch(`${API_BASE}/simulation/endpoints`);
+    const res = await fetch(endpoint('/simulation/endpoints'));
     if (!res.ok) throw new Error('Failed to fetch endpoints');
     return res.json();
   },
 
   async getEndpointById(id: string): Promise<EndpointDefinition> {
-    const res = await fetch(`${API_BASE}/simulation/endpoints/${id}`);
+    const res = await fetch(endpoint(`/simulation/endpoints/${id}`));
     if (!res.ok) throw new Error(`Failed to fetch endpoint ${id}`);
     return res.json();
   },
 
-  async updateEndpointSimulation(id: string, config: Partial<SimulationConfig>): Promise<{ endpoint: EndpointDefinition }> {
-    const res = await fetch(`${API_BASE}/simulation/endpoints/${id}`, {
+  async updateEndpointSimulation(id: string, config: Partial<SimulationConfig>, isActive?: boolean): Promise<{ endpoint: EndpointDefinition }> {
+    const res = await fetch(endpoint(`/simulation/endpoints/${id}`), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(config),
+      body: JSON.stringify({ ...config, ...(isActive !== undefined ? { isActive } : {}) }),
     });
     if (!res.ok) throw new Error(`Failed to update endpoint ${id}`);
     return res.json();
   },
 
+  async activateEndpoint(id: string): Promise<{ endpoint: EndpointDefinition }> {
+    const res = await fetch(endpoint(`/simulation/endpoints/${id}/activate`), { method: 'POST' });
+    if (!res.ok) throw new Error(`Failed to activate endpoint ${id}`);
+    return res.json();
+  },
+
+  async deactivateEndpoint(id: string): Promise<{ endpoint: EndpointDefinition }> {
+    const res = await fetch(endpoint(`/simulation/endpoints/${id}/deactivate`), { method: 'POST' });
+    if (!res.ok) throw new Error(`Failed to deactivate endpoint ${id}`);
+    return res.json();
+  },
+
+  async toggleEndpoint(id: string): Promise<{ endpoint: EndpointDefinition }> {
+    const res = await fetch(endpoint(`/simulation/endpoints/${id}/toggle`), { method: 'POST' });
+    if (!res.ok) throw new Error(`Failed to toggle endpoint ${id}`);
+    return res.json();
+  },
+
   async resetEndpointSimulation(id: string): Promise<{ endpoint: EndpointDefinition }> {
-    const res = await fetch(`${API_BASE}/simulation/endpoints/${id}/reset`, { method: 'POST' });
+    const res = await fetch(endpoint(`/simulation/endpoints/${id}/reset`), { method: 'POST' });
     if (!res.ok) throw new Error(`Failed to reset endpoint ${id}`);
     return res.json();
   },
 
   // Scenarios
   async getScenarios(): Promise<{ activeScenarioId: string; scenarios: ScenarioDefinition[] }> {
-    const res = await fetch(`${API_BASE}/simulation/scenarios`);
+    const res = await fetch(endpoint('/simulation/scenarios'));
     if (!res.ok) throw new Error('Failed to fetch scenarios');
     return res.json();
   },
 
   async activateScenario(id: string): Promise<{ scenario: ScenarioDefinition }> {
-    const res = await fetch(`${API_BASE}/simulation/scenarios/${id}/activate`, { method: 'POST' });
+    const res = await fetch(endpoint(`/simulation/scenarios/${id}/activate`), { method: 'POST' });
     if (!res.ok) throw new Error(`Failed to activate scenario ${id}`);
     return res.json();
   },
 
-  async deactivateScenario(): Promise<{ message: string }> {
-    const res = await fetch(`${API_BASE}/simulation/scenarios/deactivate`, { method: 'POST' });
+  async deactivateScenario(id?: string): Promise<{ message: string }> {
+    const url = id ? endpoint(`/simulation/scenarios/${id}/deactivate`) : endpoint('/simulation/scenarios/deactivate');
+    const res = await fetch(url, { method: 'POST' });
     if (!res.ok) throw new Error('Failed to deactivate scenario');
     return res.json();
   },
 
   // Datastore
   async resetDataStore(): Promise<{ message: string }> {
-    const res = await fetch(`${API_BASE}/simulation/datastore/reset`, { method: 'POST' });
+    const res = await fetch(endpoint('/simulation/datastore/reset'), { method: 'POST' });
     if (!res.ok) throw new Error('Failed to reset datastore');
     return res.json();
   },
@@ -116,19 +187,19 @@ export const api = {
     if (params?.page) searchParams.set('page', params.page.toString());
     if (params?.limit) searchParams.set('limit', params.limit.toString());
 
-    const res = await fetch(`${API_BASE}/activity?${searchParams.toString()}`);
+    const res = await fetch(`${endpoint('/activity')}?${searchParams.toString()}`);
     if (!res.ok) throw new Error('Failed to fetch activity logs');
     return res.json();
   },
 
   async getActivityStats(): Promise<RequestStats> {
-    const res = await fetch(`${API_BASE}/activity/stats`);
+    const res = await fetch(endpoint('/activity/stats'));
     if (!res.ok) throw new Error('Failed to fetch stats');
     return res.json();
   },
 
   async clearActivityLogs(): Promise<{ message: string }> {
-    const res = await fetch(`${API_BASE}/activity`, { method: 'DELETE' });
+    const res = await fetch(endpoint('/activity'), { method: 'DELETE' });
     if (!res.ok) throw new Error('Failed to clear activity');
     return res.json();
   },
@@ -164,8 +235,14 @@ export const api = {
       }
     }
 
+    // Resolve relative URL to effective backend
+    let targetUrl = options.url;
+    if (targetUrl.startsWith('/')) {
+      targetUrl = getEffectiveApiUrl(targetUrl);
+    }
+
     try {
-      const response = await fetch(options.url, {
+      const response = await fetch(targetUrl, {
         method: options.method,
         headers: fetchHeaders,
         body: bodyPayload,

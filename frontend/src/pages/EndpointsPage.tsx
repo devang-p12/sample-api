@@ -12,6 +12,10 @@ import {
   ShieldAlert,
   Code,
   Terminal,
+  Power,
+  PowerOff,
+  CheckCircle2,
+  AlertOctagon,
 } from 'lucide-react';
 import { api } from '../services/api.js';
 import { Card, CardContent } from '../components/Card.js';
@@ -35,6 +39,8 @@ export const EndpointsPage: React.FC = () => {
   // Selected endpoint for modal / drawer
   const [activeEndpoint, setActiveEndpoint] = useState<EndpointDefinition | null>(null);
   const [simForm, setSimForm] = useState<SimulationConfig | null>(null);
+  const [endpointIsActive, setEndpointIsActive] = useState<boolean>(true);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [copiedCurl, setCopiedCurl] = useState(false);
@@ -55,15 +61,32 @@ export const EndpointsPage: React.FC = () => {
   const openEndpointModal = (ep: EndpointDefinition) => {
     setActiveEndpoint(ep);
     setSimForm(JSON.parse(JSON.stringify(ep.simulationConfig)));
+    setEndpointIsActive(ep.isActive !== false);
     setSaveSuccess(false);
+  };
+
+  const handleToggleActive = async (ep: EndpointDefinition, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setTogglingId(ep.id);
+    try {
+      const res = await api.toggleEndpoint(ep.id);
+      if (activeEndpoint && activeEndpoint.id === ep.id) {
+        setActiveEndpoint(res.endpoint);
+        setEndpointIsActive(res.endpoint.isActive !== false);
+      }
+      await loadEndpoints();
+    } finally {
+      setTogglingId(null);
+    }
   };
 
   const handleSaveSimulation = async () => {
     if (!activeEndpoint || !simForm) return;
     setSaving(true);
     try {
-      const res = await api.updateEndpointSimulation(activeEndpoint.id, simForm);
+      const res = await api.updateEndpointSimulation(activeEndpoint.id, simForm, endpointIsActive);
       setActiveEndpoint(res.endpoint);
+      setEndpointIsActive(res.endpoint.isActive !== false);
       setSaveSuccess(true);
       await loadEndpoints();
       setTimeout(() => setSaveSuccess(false), 2000);
@@ -78,6 +101,7 @@ export const EndpointsPage: React.FC = () => {
     try {
       const res = await api.resetEndpointSimulation(activeEndpoint.id);
       setActiveEndpoint(res.endpoint);
+      setEndpointIsActive(true);
       setSimForm(JSON.parse(JSON.stringify(res.endpoint.simulationConfig)));
       await loadEndpoints();
     } finally {
@@ -189,7 +213,8 @@ export const EndpointsPage: React.FC = () => {
           </Card>
         ) : (
           filteredEndpoints.map(ep => {
-            const isSimulated = ep.simulationConfig.mode !== 'HEALTHY';
+            const isDeactivated = ep.isActive === false;
+            const isSimulated = !isDeactivated && ep.simulationConfig.mode !== 'HEALTHY';
             const latencyMs = ep.simulationConfig.latency.type === 'fixed'
               ? ep.simulationConfig.latency.fixedMs
               : ep.simulationConfig.latency.type === 'random'
@@ -202,7 +227,9 @@ export const EndpointsPage: React.FC = () => {
                 onClick={() => openEndpointModal(ep)}
                 className={cn(
                   'group p-3.5 sm:p-4 rounded-xl border bg-slate-900/60 hover:bg-slate-900 transition-all cursor-pointer flex flex-col md:flex-row items-start md:items-center justify-between gap-3',
-                  isSimulated
+                  isDeactivated
+                    ? 'border-rose-600/50 bg-rose-950/20'
+                    : isSimulated
                     ? ep.simulationConfig.mode === 'UNAVAILABLE' || ep.simulationConfig.statusCode === 503
                       ? 'border-rose-500/40 bg-rose-950/15'
                       : 'border-amber-500/40 bg-amber-950/15'
@@ -219,6 +246,11 @@ export const EndpointsPage: React.FC = () => {
                       <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 border border-slate-700">
                         {ep.service}
                       </span>
+                      {isDeactivated && (
+                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 font-semibold">
+                          OFFLINE 503
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-slate-400 truncate mt-0.5 font-sans">
                       {ep.summary}
@@ -228,7 +260,11 @@ export const EndpointsPage: React.FC = () => {
 
                 {/* Simulation Badges & Action Buttons */}
                 <div className="flex items-center space-x-2.5 self-end md:self-auto shrink-0">
-                  {isSimulated ? (
+                  {isDeactivated ? (
+                    <Badge variant="destructive" size="sm" className="font-mono font-bold tracking-wider">
+                      DEACTIVATED
+                    </Badge>
+                  ) : isSimulated ? (
                     <div className="flex items-center space-x-1.5">
                       <Badge
                         variant={
@@ -256,6 +292,33 @@ export const EndpointsPage: React.FC = () => {
                       HEALTHY
                     </Badge>
                   )}
+
+                  {/* Toggle Active / Deactivate Quick Button */}
+                  <Button
+                    size="sm"
+                    variant={isDeactivated ? "success" : "outline"}
+                    onClick={(e) => handleToggleActive(ep, e)}
+                    loading={togglingId === ep.id}
+                    className={cn(
+                      "h-8 px-2.5 text-xs font-semibold transition-all",
+                      isDeactivated
+                        ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm"
+                        : "text-rose-400 hover:text-rose-200 border-rose-500/30 hover:bg-rose-950/40"
+                    )}
+                    title={isDeactivated ? "Re-activate this API" : "Deactivate this API (returns 503)"}
+                  >
+                    {isDeactivated ? (
+                      <>
+                        <Power className="w-3.5 h-3.5 mr-1" />
+                        Activate
+                      </>
+                    ) : (
+                      <>
+                        <PowerOff className="w-3.5 h-3.5 mr-1" />
+                        Deactivate
+                      </>
+                    )}
+                  </Button>
 
                   <Button
                     size="sm"
@@ -330,6 +393,50 @@ export const EndpointsPage: React.FC = () => {
                   Test Endpoint
                 </Button>
               </div>
+            </div>
+
+            {/* Endpoint Active / Deactivated Banner Toggle */}
+            <div className={cn(
+              'p-3.5 rounded-lg border flex flex-col sm:flex-row sm:items-center justify-between gap-3',
+              endpointIsActive ? 'bg-emerald-950/20 border-emerald-500/30' : 'bg-rose-950/30 border-rose-500/40'
+            )}>
+              <div className="flex items-center space-x-2.5">
+                <div className={cn('p-1.5 rounded-md', endpointIsActive ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400')}>
+                  {endpointIsActive ? <CheckCircle2 className="w-4 h-4" /> : <AlertOctagon className="w-4 h-4" />}
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-slate-100 flex items-center space-x-2">
+                    <span>Endpoint Status: {endpointIsActive ? 'ACTIVE (Operational)' : 'DEACTIVATED (Offline)'}</span>
+                    <Badge variant={endpointIsActive ? 'success' : 'destructive'} size="sm">
+                      {endpointIsActive ? 'Operational' : '503 Deactivated'}
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    {endpointIsActive
+                      ? 'Endpoint is responding to incoming traffic and simulation configurations.'
+                      : 'Endpoint is intentionally disabled. Any incoming requests immediately fail with 503 Service Unavailable.'}
+                  </p>
+                </div>
+              </div>
+
+              <Button
+                size="sm"
+                variant={endpointIsActive ? 'destructive' : 'success'}
+                onClick={() => setEndpointIsActive(!endpointIsActive)}
+                className="text-xs h-8 shrink-0 font-medium"
+              >
+                {endpointIsActive ? (
+                  <>
+                    <PowerOff className="w-3.5 h-3.5 mr-1.5" />
+                    Deactivate Endpoint
+                  </>
+                ) : (
+                  <>
+                    <Power className="w-3.5 h-3.5 mr-1.5" />
+                    Re-Activate Endpoint
+                  </>
+                )}
+              </Button>
             </div>
 
             {/* Simulation Controls Grid */}
@@ -474,6 +581,78 @@ export const EndpointsPage: React.FC = () => {
                     <option value="v2">Schema V2 (Renamed fields: productName, amount)</option>
                     <option value="broken">Broken Schema (Unexpected shape: &#123; unexpected: true &#125;)</option>
                   </select>
+                </div>
+
+                {/* Authentication Simulation */}
+                <div className="space-y-1.5 sm:col-span-2 pt-2 border-t border-slate-800/60">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-slate-300">Authentication Enforcement</label>
+                    <label className="text-xs font-mono text-slate-400 flex items-center space-x-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={simForm.auth?.required || simForm.mode === 'AUTH_REQUIRED'}
+                        onChange={e => {
+                          const req = e.target.checked;
+                          setSimForm({
+                            ...simForm,
+                            mode: req ? 'AUTH_REQUIRED' : (simForm.mode === 'AUTH_REQUIRED' ? 'HEALTHY' : simForm.mode),
+                            auth: {
+                              ...simForm.auth,
+                              required: req,
+                              type: req && simForm.auth?.type === 'none' ? 'bearer' : simForm.auth?.type || 'bearer',
+                            },
+                          });
+                        }}
+                        className="accent-cyan-500"
+                      />
+                      <span>Enforce Authentication (Returns 401 if invalid)</span>
+                    </label>
+                  </div>
+
+                  {(simForm.auth?.required || simForm.mode === 'AUTH_REQUIRED') && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                      <div>
+                        <span className="text-[11px] text-slate-400 mb-1 block">Auth Mechanism:</span>
+                        <select
+                          value={simForm.auth?.type || 'bearer'}
+                          onChange={e => setSimForm({
+                            ...simForm,
+                            auth: {
+                              ...simForm.auth,
+                              required: true,
+                              type: e.target.value as any,
+                            }
+                          })}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-cyan-500"
+                        >
+                          <option value="bearer">Bearer Token (Authorization: Bearer &lt;token&gt;)</option>
+                          <option value="basic">Basic Auth (Authorization: Basic base64)</option>
+                          <option value="apikey">API Key (Header X-API-Key or ?apiKey=)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-slate-400 mb-1 block">Expected Token / Credential:</span>
+                        <input
+                          type="text"
+                          placeholder={simForm.auth?.type === 'apikey' ? 'sentinel-api-key-live-12345' : 'sentinel-mock-jwt-token-xyz'}
+                          value={simForm.auth?.expectedToken || simForm.auth?.apiKey || ''}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setSimForm({
+                              ...simForm,
+                              auth: {
+                                ...simForm.auth,
+                                required: true,
+                                expectedToken: val,
+                                apiKey: val,
+                              }
+                            });
+                          }}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-cyan-500"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

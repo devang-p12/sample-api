@@ -163,16 +163,34 @@ export const ScenariosPage: React.FC = () => {
                   ID: {sc.id}
                 </span>
 
-                {isActive ? (
+                {sc.id === 'normal' ? (
+                  isActive ? (
+                    <span className="text-xs font-mono text-emerald-400 font-semibold flex items-center space-x-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Nominal Active</span>
+                    </span>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="success"
+                      onClick={() => handleActivate('normal')}
+                      loading={activatingId === 'normal'}
+                      className="text-xs font-semibold"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                      Restore Nominal State
+                    </Button>
+                  )
+                ) : isActive ? (
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => handleActivate('normal')}
                     loading={activatingId === 'normal'}
-                    className="text-xs border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10"
+                    className="text-xs border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10 font-medium"
                   >
                     <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
-                    Deactivate
+                    Deactivate Scenario
                   </Button>
                 ) : (
                   <Button

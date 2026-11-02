@@ -727,11 +727,13 @@ export class SimulationService {
         summary: 'API V2 Products Catalog',
         description: 'Modern v2 schema representation of product catalog.',
         tags: ['API Versioning'],
+        isActive: true,
         simulationConfig: JSON.parse(JSON.stringify(DEFAULT_SIMULATION_CONFIG)),
       },
     ];
 
     for (const ep of defaultList) {
+      if (ep.isActive === undefined) ep.isActive = true;
       this.endpoints.set(ep.id, ep);
     }
   }
@@ -756,37 +758,66 @@ export class SimulationService {
     return this.endpoints.get(id);
   }
 
-  public updateEndpointSimulation(id: string, config: Partial<SimulationConfig>): EndpointDefinition | null {
+  public setEndpointActive(id: string, active: boolean): EndpointDefinition | null {
     const ep = this.endpoints.get(id);
     if (!ep) return null;
+    ep.isActive = active;
+    this.endpoints.set(id, ep);
+    return ep;
+  }
+
+  public toggleEndpointActive(id: string): EndpointDefinition | null {
+    const ep = this.endpoints.get(id);
+    if (!ep) return null;
+    ep.isActive = ep.isActive === false ? true : false;
+    this.endpoints.set(id, ep);
+    return ep;
+  }
+
+  public updateEndpointSimulation(id: string, config: Partial<SimulationConfig>, isActive?: boolean): EndpointDefinition | null {
+    const ep = this.endpoints.get(id);
+    if (!ep) return null;
+
+    if (isActive !== undefined) {
+      ep.isActive = isActive;
+    }
+
+    const isHealthyMode = config.mode === 'HEALTHY';
+
     ep.simulationConfig = {
       ...ep.simulationConfig,
       ...config,
+      statusCode: isHealthyMode && config.statusCode === undefined ? undefined : (config.statusCode !== undefined ? config.statusCode : ep.simulationConfig.statusCode),
       latency: {
         ...ep.simulationConfig.latency,
-        ...(config.latency || {}),
+        ...(config.latency || (isHealthyMode ? { type: 'none', fixedMs: 0 } : {})),
       },
       failure: {
         ...ep.simulationConfig.failure,
-        ...(config.failure || {}),
+        ...(config.failure || (isHealthyMode ? { enabled: false, ratePercent: 0 } : {})),
       },
       rateLimit: {
         ...ep.simulationConfig.rateLimit,
-        ...(config.rateLimit || {}),
+        ...(config.rateLimit || (isHealthyMode ? { enabled: false } : {})),
       },
       auth: {
         ...ep.simulationConfig.auth,
-        ...(config.auth || {}),
+        ...(config.auth || (isHealthyMode ? { required: false } : {})),
       },
       database: {
         ...ep.simulationConfig.database,
-        ...(config.database || {}),
+        ...(config.database || (isHealthyMode ? { mode: 'normal', addedLatencyMs: 0 } : {})),
       },
       gateway: {
         ...ep.simulationConfig.gateway,
-        ...(config.gateway || {}),
+        ...(config.gateway || (isHealthyMode ? { mode: 'normal' } : {})),
       },
     };
+
+    if (ep.simulationConfig.mode === 'UNAVAILABLE' && !ep.simulationConfig.statusCode) {
+      ep.simulationConfig.statusCode = 503;
+    }
+
     this.endpoints.set(id, ep);
     return ep;
   }
@@ -794,6 +825,7 @@ export class SimulationService {
   public resetEndpointSimulation(id: string): EndpointDefinition | null {
     const ep = this.endpoints.get(id);
     if (!ep) return null;
+    ep.isActive = true;
     ep.simulationConfig = JSON.parse(JSON.stringify(DEFAULT_SIMULATION_CONFIG));
     this.endpoints.set(id, ep);
     return ep;
@@ -808,7 +840,9 @@ export class SimulationService {
       globalTimeoutMs: undefined,
       activeScenarioId: 'normal',
     };
+    this.rateLimitBuckets.clear();
     for (const [id, ep] of this.endpoints.entries()) {
+      ep.isActive = true;
       ep.simulationConfig = JSON.parse(JSON.stringify(DEFAULT_SIMULATION_CONFIG));
       this.endpoints.set(id, ep);
     }

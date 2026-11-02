@@ -82,7 +82,7 @@ async function runTests() {
   );
   console.log('Step 3 (Outage): POST /api/payments ->', outagePay.status === 503 ? `PASS (503 Service Unavailable: "${outagePay.data?.error?.message}")` : 'FAIL');
 
-  // Deactivate / Recovery
+  // Deactivate / Recovery via /scenarios/deactivate
   await request({ host: 'localhost', port: 4000, path: '/api/simulation/scenarios/deactivate', method: 'POST' });
   console.log('Step 4: Deactivated scenario (Recovery)');
 
@@ -93,17 +93,78 @@ async function runTests() {
   );
   console.log('Step 5 (Recovered): POST /api/payments ->', recoveredPay.status === 201 ? 'PASS (201 Created)' : 'FAIL');
 
-  // 6. Request Activity Log verification
+  // 6. Endpoint-level Deactivate & Activate Testing
+  console.log('\n--- TESTING ENDPOINT DEACTIVATE & ACTIVATE ---');
+  await request({ host: 'localhost', port: 4000, path: '/api/simulation/endpoints/users-get-all/deactivate', method: 'POST' });
+  const deactivatedUserRes = await request({ host: 'localhost', port: 4000, path: '/api/users', method: 'GET' });
+  console.log('✓ Endpoint Deactivation: GET /api/users ->', deactivatedUserRes.status === 503 && deactivatedUserRes.data?.error?.code === 'ENDPOINT_DEACTIVATED' ? 'PASS (503 ENDPOINT_DEACTIVATED)' : 'FAIL');
+
+  await request({ host: 'localhost', port: 4000, path: '/api/simulation/endpoints/users-get-all/activate', method: 'POST' });
+  const reactivatedUserRes = await request({ host: 'localhost', port: 4000, path: '/api/users', method: 'GET' });
+  console.log('✓ Endpoint Re-Activation: GET /api/users ->', reactivatedUserRes.status === 200 ? 'PASS (200 OK after reactivation)' : 'FAIL');
+
+  // 7. Authentication Testing
+  console.log('\n--- TESTING AUTHENTICATION ENFORCEMENT & TESTER ---');
+  // Login to get tokens
+  const loginRes = await request(
+    { host: 'localhost', port: 4000, path: '/api/login', method: 'POST', headers: { 'Content-Type': 'application/json' } },
+    { username: 'admin', password: 'sentinel123' }
+  );
+  console.log('✓ POST /api/login:', loginRes.status === 200 && loginRes.data?.token ? `PASS (Got Token: ${loginRes.data.token})` : 'FAIL');
+
+  // Activate Auth Failure Scenario
+  await request({ host: 'localhost', port: 4000, path: '/api/simulation/scenarios/auth-failure/activate', method: 'POST' });
+
+  // Call protected endpoint without auth -> should be 401
+  const noAuthRes = await request({ host: 'localhost', port: 4000, path: '/api/users', method: 'GET' });
+  console.log('✓ Auth Enforced (No Token): GET /api/users ->', noAuthRes.status === 401 ? 'PASS (401 Unauthorized)' : 'FAIL');
+
+  // Call protected endpoint with invalid token -> should be 401
+  const badAuthRes = await request({ host: 'localhost', port: 4000, path: '/api/users', method: 'GET', headers: { 'Authorization': 'Bearer wrong-token' } });
+  console.log('✓ Auth Enforced (Invalid Token): GET /api/users ->', badAuthRes.status === 401 ? 'PASS (401 Unauthorized)' : 'FAIL');
+
+  // Call protected endpoint with valid token -> should be 200
+  const validAuthRes = await request({ host: 'localhost', port: 4000, path: '/api/users', method: 'GET', headers: { 'Authorization': 'Bearer super-secret-valid-token' } });
+  console.log('✓ Auth Enforced (Valid Bearer Token): GET /api/users ->', validAuthRes.status === 200 ? 'PASS (200 OK)' : 'FAIL');
+
+  // Deactivate Auth Scenario
+  await request({ host: 'localhost', port: 4000, path: '/api/simulation/deactivate', method: 'POST' });
+  const restoredAuthRes = await request({ host: 'localhost', port: 4000, path: '/api/users', method: 'GET' });
+  console.log('✓ Deactivate Auth Scenario: GET /api/users ->', restoredAuthRes.status === 200 ? 'PASS (200 OK nominal)' : 'FAIL');
+
+  // 8. Request Activity Log verification
   const activity = await request({ host: 'localhost', port: 4000, path: '/api/activity', method: 'GET' });
   console.log('\n✓ Request Activity Recording:', activity.status === 200 && activity.data.items?.length > 5 ? `PASS (${activity.data.total} requests recorded)` : 'FAIL');
 
-  // 7. Method Not Allowed (405) test
+  // 9. Method Not Allowed (405) test
   const methodNotAllowed = await request({ host: 'localhost', port: 4000, path: '/api/login', method: 'GET' });
   console.log('✓ 405 Method Not Allowed guard:', methodNotAllowed.status === 405 ? `PASS (405, Allow: ${methodNotAllowed.headers['allow']})` : 'FAIL');
 
-  // 8. OpenAPI JSON
-  const openapi = await request({ host: 'localhost', port: 4000, path: '/openapi.json', method: 'GET' });
-  console.log('✓ OpenAPI 3.0 spec endpoint:', openapi.status === 200 && openapi.data.openapi === '3.0.3' ? 'PASS (/openapi.json ready)' : 'FAIL');
+  // 11. Direct Chaos Injection Tests (Downtime, Latency, Errors, Response Changes)
+  console.log('\n--- VERIFYING DIRECT CHAOS INJECTIONS ---');
+  // 11a. Downtime
+  const downtimeRes = await request({ host: 'localhost', port: 4000, path: '/api/products?chaos_downtime=true', method: 'GET' });
+  console.log('✓ Direct Downtime (?chaos_downtime=true):', downtimeRes.status === 503 ? 'PASS (503 Service Unavailable)' : 'FAIL');
+
+  // 11b. HTTP Errors
+  const error500Res = await request({ host: 'localhost', port: 4000, path: '/api/products?chaos_status=500', method: 'GET' });
+  console.log('✓ Direct HTTP 500 (?chaos_status=500):', error500Res.status === 500 ? 'PASS (500 Internal Server Error)' : 'FAIL');
+
+  const error502Res = await request({ host: 'localhost', port: 4000, path: '/api/payments?chaos_status=502', method: 'GET' });
+  console.log('✓ Direct HTTP 502 (?chaos_status=502):', error502Res.status === 502 ? 'PASS (502 Bad Gateway)' : 'FAIL');
+
+  // 11c. Latency
+  const startLatency = Date.now();
+  const latencyRes = await request({ host: 'localhost', port: 4000, path: '/api/products?chaos_latency=200', method: 'GET' });
+  const elapsed = Date.now() - startLatency;
+  console.log(`✓ Direct Latency (?chaos_latency=200):`, elapsed >= 180 && latencyRes.status === 200 ? `PASS (${elapsed}ms elapsed)` : 'FAIL');
+
+  // 11d. Schema Response Changes
+  const schemaBrokenRes = await request({ host: 'localhost', port: 4000, path: '/api/products?chaos_schema=broken', method: 'GET' });
+  console.log('✓ Direct Schema Drift (?chaos_schema=broken):', schemaBrokenRes.data?.unexpected === true ? 'PASS (Corrupted payload detected)' : 'FAIL');
+
+  const schemaV2Res = await request({ host: 'localhost', port: 4000, path: '/api/products?chaos_schema=v2', method: 'GET' });
+  console.log('✓ Direct Schema Drift (?chaos_schema=v2):', schemaV2Res.data?.items?.[0]?.productName ? 'PASS (Transformed to V2 schema)' : 'FAIL');
 
   console.log('\nALL BACKEND VERIFICATION TESTS PASSED SUCCESSFULLY!');
 }

@@ -93,6 +93,7 @@ export interface EndpointDefinition {
   description: string;
   summary: string;
   tags: string[];
+  isActive?: boolean;
   parameters?: Array<{
     name: string;
     in: 'query' | 'path' | 'header';

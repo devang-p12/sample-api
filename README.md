@@ -252,6 +252,105 @@ Target Sentinel load tests against:
 
 ---
 
+## 🔐 How to Test Authentication
+
+The Sentinel API Playground provides comprehensive simulation for multiple authentication schemes:
+
+### 1. Generating Tokens with the Login API
+```bash
+curl -X POST http://localhost:4000/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"sentinel123"}'
+```
+Response:
+```json
+{
+  "status": "authenticated",
+  "tokenType": "Bearer",
+  "token": "sentinel-mock-jwt-token-xyz",
+  "apiKey": "sentinel-api-key-live-12345",
+  "expiresInSeconds": 3600,
+  "user": { "id": "usr_1001", "username": "admin", "role": "admin" }
+}
+```
+
+### 2. Testing Auth with Scenarios
+1. Go to **Scenarios** in the UI dashboard ([http://localhost:5173/scenarios](http://localhost:5173/scenarios)) or call:
+   ```bash
+   curl -X POST http://localhost:4000/api/simulation/scenarios/auth-failure/activate
+   ```
+2. Any request to protected endpoints (`/api/users`, `/api/orders`, `/api/payments`) without a valid token will fail:
+   ```bash
+   # Fails with 401 Unauthorized
+   curl -i http://localhost:4000/api/users
+
+   # Succeeds with 200 OK
+   curl -i -H "Authorization: Bearer super-secret-valid-token" http://localhost:4000/api/users
+   ```
+3. To deactivate the auth failure scenario and return to nominal:
+   ```bash
+   curl -X POST http://localhost:4000/api/simulation/deactivate
+   ```
+
+### 3. Testing Auth on Individual Endpoints
+1. Open the **Endpoints** page ([http://localhost:5173/endpoints](http://localhost:5173/endpoints)).
+2. Click **Configure** on any endpoint (e.g. `GET /api/products`).
+3. Check **Enforce Authentication** and choose:
+   - **Bearer Token**: `Authorization: Bearer sentinel-mock-jwt-token-xyz`
+   - **Basic Auth**: `Authorization: Basic YWRtaW46c2VudGluZWwxMjM=` (`admin:sentinel123`)
+   - **API Key**: Header `X-API-Key: sentinel-api-key-live-12345` or query `?apiKey=...`
+4. Click **Save & Apply Simulation**.
+
+### 4. Testing with the Built-in API Tester
+1. Navigate to the **API Tester** tab ([http://localhost:5173/test](http://localhost:5173/test)).
+2. Select the **Auth** tab below the URL bar.
+3. Switch between **Bearer Token**, **Basic Auth**, and **API Key** with automatic prefilled credentials.
+
+---
+
+## ⚡ How API Deactivation & Recovery Works
+
+You can deactivate individual APIs or cluster-wide services to test Sentinel outage detection and automated incident creation:
+
+### 1. Deactivating an Individual API Endpoint
+On the **Endpoints** page ([http://localhost:5173/endpoints](http://localhost:5173/endpoints)):
+- Click the **Deactivate** button directly on any endpoint row (or toggle inside the **Configure** modal).
+- The endpoint will immediately enter `DEACTIVATED` state.
+- Any HTTP call to that endpoint returns:
+  ```json
+  {
+    "error": {
+      "code": "ENDPOINT_DEACTIVATED",
+      "message": "Endpoint 'GET /api/users' is currently DEACTIVATED in Sentinel API Playground.",
+      "status": 503
+    }
+  }
+  ```
+- Click **Activate** at any time to immediately restore the endpoint back to normal `200 OK`.
+
+### Via API:
+```bash
+# Deactivate an endpoint
+curl -X POST http://localhost:4000/api/simulation/endpoints/users-get-all/deactivate
+
+# Test it returns 503
+curl -i http://localhost:4000/api/users
+
+# Re-activate the endpoint
+curl -X POST http://localhost:4000/api/simulation/endpoints/users-get-all/activate
+```
+
+### 2. Deactivating Chaos Scenarios (Recovery)
+When any scenario is active (such as Payment Outage, Latency Spike, or Auth Failure):
+- On the **Scenarios** page ([http://localhost:5173/scenarios](http://localhost:5173/scenarios)), click **Deactivate Scenario** or **Restore Normal Operation**.
+- Or send a POST request:
+  ```bash
+  curl -X POST http://localhost:4000/api/simulation/deactivate
+  ```
+- All endpoints, rate limit counters, and latency knobs instantly reset to nominal `HEALTHY` operation.
+
+---
+
 ## 🎬 Step 59 Demonstration Flow: Degradation → Outage → Alert → Incident → Recovery
 
 The completed playground supports the exact demonstration flow:

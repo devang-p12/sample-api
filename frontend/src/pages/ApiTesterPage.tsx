@@ -13,7 +13,7 @@ import {
   Clock,
   Sparkles,
 } from 'lucide-react';
-import { api } from '../services/api.js';
+import { api, getBackendBaseUrl } from '../services/api.js';
 import { Card, CardContent } from '../components/Card.js';
 import { Button } from '../components/Button.js';
 import { MethodBadge, StatusBadge, Badge } from '../components/Badge.js';
@@ -59,6 +59,14 @@ const TEMPLATE_PRESETS = [
   },
   { name: 'API V1 Products', method: 'GET', url: '{{baseUrl}}/api/v1/products' },
   { name: 'API V2 Products (Changed Schema)', method: 'GET', url: '{{baseUrl}}/api/v2/products' },
+  // Direct Chaos Demonstrations
+  { name: '🔥 Chaos: Downtime (HTTP 503)', method: 'GET', url: '{{baseUrl}}/api/products?chaos_downtime=true' },
+  { name: '⏳ Chaos: High Latency (3s delay)', method: 'GET', url: '{{baseUrl}}/api/products?chaos_latency=3000' },
+  { name: '💥 Chaos: HTTP 500 Error', method: 'GET', url: '{{baseUrl}}/api/products?chaos_status=500' },
+  { name: '🚫 Chaos: HTTP 502 Bad Gateway', method: 'GET', url: '{{baseUrl}}/api/payments?chaos_status=502' },
+  { name: '🚦 Chaos: HTTP 429 Rate Limit', method: 'GET', url: '{{baseUrl}}/api/orders?chaos_status=429' },
+  { name: '🔄 Chaos: Schema Drift (V2)', method: 'GET', url: '{{baseUrl}}/api/products?chaos_schema=v2' },
+  { name: '⚡ Chaos: Corrupted Schema Payload', method: 'GET', url: '{{baseUrl}}/api/products?chaos_schema=broken' },
 ];
 
 export const ApiTesterPage: React.FC = () => {
@@ -99,8 +107,9 @@ export const ApiTesterPage: React.FC = () => {
   const [copiedCurl, setCopiedCurl] = useState(false);
 
   // Environment variables
+  const currentBase = api ? (getBackendBaseUrl() || (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:4000' : (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:4000'))) : 'http://localhost:4000';
   const envVars: Record<string, string> = {
-    baseUrl: 'http://localhost:4000',
+    baseUrl: currentBase,
     token: 'sentinel-mock-jwt-token-xyz',
     userId: 'usr_1001',
     productId: 'prd_2001',

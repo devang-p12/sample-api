@@ -11,7 +11,8 @@ import {
   Sliders,
   Radio,
 } from 'lucide-react';
-import { api } from '../services/api.js';
+import { Globe } from 'lucide-react';
+import { api, getBackendBaseUrl, setBackendBaseUrl, testBackendConnection } from '../services/api.js';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/Card.js';
 import { Button } from '../components/Button.js';
 import { Badge } from '../components/Badge.js';
@@ -30,6 +31,10 @@ export const SettingsPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [reseedSuccess, setReseedSuccess] = useState(false);
+  const [backendUrl, setBackendUrl] = useState(getBackendBaseUrl());
+  const [testingBackend, setTestingBackend] = useState(false);
+  const [backendTestStatus, setBackendTestStatus] = useState<{ ok: boolean; message: string; latencyMs: number } | null>(null);
+  const [backendSavedSuccess, setBackendSavedSuccess] = useState(false);
 
   const loadConfig = async () => {
     try {
@@ -54,6 +59,26 @@ export const SettingsPage: React.FC = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const effectiveTarget = getBackendBaseUrl() || (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:4000' : (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:4000'));
+
+  const handleTestBackend = async () => {
+    setTestingBackend(true);
+    setBackendTestStatus(null);
+    try {
+      const res = await testBackendConnection(backendUrl);
+      setBackendTestStatus(res);
+    } finally {
+      setTestingBackend(false);
+    }
+  };
+
+  const handleSaveBackend = () => {
+    setBackendBaseUrl(backendUrl);
+    setBackendSavedSuccess(true);
+    setTimeout(() => setBackendSavedSuccess(false), 2500);
+    loadConfig();
   };
 
   const handleResetDatastore = async () => {
@@ -211,6 +236,81 @@ export const SettingsPage: React.FC = () => {
 
         {/* Datastore & Sentinel Integration Info */}
         <div className="space-y-6">
+          {/* Target Backend Configuration */}
+          <Card className="border-cyan-500/30">
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center space-x-2 text-cyan-400">
+                <Globe className="w-4 h-4" />
+                <span>Backend Web Service Target (Render / Local)</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-slate-400">
+                When deployed on Vercel, point this frontend to your deployed Render backend service.
+              </p>
+              <div className="space-y-1.5">
+                <input
+                  type="text"
+                  value={backendUrl}
+                  onChange={(e) => setBackendUrl(e.target.value)}
+                  placeholder="https://simulation-api.onrender.com"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500"
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBackendUrl('http://localhost:4000')}
+                    className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 hover:bg-slate-700"
+                  >
+                    Localhost (:4000)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBackendUrl('')}
+                    className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 hover:bg-slate-700"
+                  >
+                    Default (Proxy)
+                  </button>
+                </div>
+              </div>
+
+              {backendTestStatus && (
+                <div className={cn(
+                  'text-xs font-mono p-2 rounded border',
+                  backendTestStatus.ok ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
+                )}>
+                  {backendTestStatus.message} ({backendTestStatus.latencyMs}ms)
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleTestBackend}
+                  loading={testingBackend}
+                  className="text-xs flex-1"
+                >
+                  Test Ping
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSaveBackend}
+                  className="text-xs bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-semibold flex-1"
+                >
+                  Save URL
+                </Button>
+              </div>
+
+              {backendSavedSuccess && (
+                <div className="text-xs font-mono text-emerald-400 flex items-center justify-center space-x-1">
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Target backend saved!</span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className="text-sm flex items-center space-x-2">
@@ -249,11 +349,11 @@ export const SettingsPage: React.FC = () => {
             </CardHeader>
             <CardContent className="space-y-3 text-xs text-slate-300 font-sans">
               <p>Configure your <strong>Sentinel</strong> platform monitoring probes to target:</p>
-              <div className="bg-slate-950 rounded p-2 font-mono text-[11px] text-slate-200 space-y-1">
-                <div>http://localhost:4000/api/health</div>
-                <div>http://localhost:4000/api/payments/health</div>
-                <div>http://localhost:4000/api/products</div>
-                <div>http://localhost:4000/api/payments</div>
+              <div className="bg-slate-950 rounded p-2 font-mono text-[11px] text-slate-200 space-y-1 break-all">
+                <div>{effectiveTarget}/api/health</div>
+                <div>{effectiveTarget}/api/payments/health</div>
+                <div>{effectiveTarget}/api/products</div>
+                <div>{effectiveTarget}/api/payments</div>
               </div>
               <p className="text-slate-400 text-[11px] pt-1">
                 All responses include <code>X-Request-ID</code>, <code>X-Response-Time</code>, and <code>X-Simulation-Mode</code> headers for distributed tracing.

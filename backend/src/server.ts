@@ -29,6 +29,11 @@ app.use(
       'Accept',
       'Origin',
       'X-Requested-With',
+      'X-Chaos-Downtime',
+      'X-Chaos-Latency',
+      'X-Chaos-Status',
+      'X-Chaos-Message',
+      'X-Chaos-Schema',
     ],
     exposedHeaders: [
       'X-Request-ID',

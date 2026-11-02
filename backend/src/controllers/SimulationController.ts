@@ -61,7 +61,8 @@ export class SimulationController {
 
   public static updateEndpoint(req: Request, res: Response): void {
     const id = String(req.params.id);
-    const updated = simulationService.updateEndpointSimulation(id, req.body || {});
+    const { isActive, ...config } = req.body || {};
+    const updated = simulationService.updateEndpointSimulation(id, config, isActive);
     if (!updated) {
       res.status(404).json({
         error: {
@@ -76,6 +77,69 @@ export class SimulationController {
     }
     res.status(200).json({
       message: `Simulation configuration updated for ${updated.method} ${updated.path}`,
+      endpoint: updated,
+    });
+  }
+
+  public static activateEndpoint(req: Request, res: Response): void {
+    const id = String(req.params.id);
+    const updated = simulationService.setEndpointActive(id, true);
+    if (!updated) {
+      res.status(404).json({
+        error: {
+          code: 'ENDPOINT_NOT_FOUND',
+          message: `Endpoint '${id}' not found to activate.`,
+          status: 404,
+          requestId: res.getHeader('X-Request-ID') as string,
+          timestamp: new Date().toISOString(),
+        },
+      });
+      return;
+    }
+    res.status(200).json({
+      message: `Endpoint ${updated.method} ${updated.path} activated.`,
+      endpoint: updated,
+    });
+  }
+
+  public static deactivateEndpoint(req: Request, res: Response): void {
+    const id = String(req.params.id);
+    const updated = simulationService.setEndpointActive(id, false);
+    if (!updated) {
+      res.status(404).json({
+        error: {
+          code: 'ENDPOINT_NOT_FOUND',
+          message: `Endpoint '${id}' not found to deactivate.`,
+          status: 404,
+          requestId: res.getHeader('X-Request-ID') as string,
+          timestamp: new Date().toISOString(),
+        },
+      });
+      return;
+    }
+    res.status(200).json({
+      message: `Endpoint ${updated.method} ${updated.path} deactivated (returns 503).`,
+      endpoint: updated,
+    });
+  }
+
+  public static toggleEndpoint(req: Request, res: Response): void {
+    const id = String(req.params.id);
+    const updated = simulationService.toggleEndpointActive(id);
+    if (!updated) {
+      res.status(404).json({
+        error: {
+          code: 'ENDPOINT_NOT_FOUND',
+          message: `Endpoint '${id}' not found to toggle.`,
+          status: 404,
+          requestId: res.getHeader('X-Request-ID') as string,
+          timestamp: new Date().toISOString(),
+        },
+      });
+      return;
+    }
+    res.status(200).json({
+      message: `Endpoint ${updated.method} ${updated.path} is now ${updated.isActive !== false ? 'active' : 'deactivated'}.`,
       endpoint: updated,
     });
   }
